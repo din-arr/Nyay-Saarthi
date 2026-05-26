@@ -5,7 +5,8 @@ import { GeistMono } from "geist/font/mono"
 import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
 import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
+import { ThemeProvider } from "@/components/theme-provider"
+import { LanguageProvider } from "@/lib/language-context"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -20,14 +21,22 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="hi">
+    <html lang="hi" suppressHydrationWarning>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <Header />
-        <main className="pt-20">
-          <Suspense fallback={null}>{children}</Suspense>
-        </main>
-        {/* <Footer /> */}
-        <Analytics />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
+          <LanguageProvider>
+            <Header />
+            <main className="pt-20">
+              <Suspense fallback={null}>{children}</Suspense>
+            </main>
+            <Analytics />
+          </LanguageProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

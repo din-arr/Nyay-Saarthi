@@ -28,7 +28,7 @@ This application allows users to upload legal documents and receive simplified s
 ### Backend
 - *Framework*: FastAPI  
 - *Language*: Python  
-- *AI/ML*: LangChain, Google Generative AI, Hugging Face Embeddings  
+- *AI/ML*: Ollama local LLM, LangChain, Ollama embeddings  
 - *Vector Store*: Qdrant  
 - *Deployment*: Docker  
 
@@ -63,9 +63,29 @@ This application allows users to upload legal documents and receive simplified s
    pip install -r requirements.txt
    
 
-4. *Environment Variables*:  
-   Create a .env file in the root of the frontend and backend directories.  
-   Add the necessary environment variables (e.g., Supabase URL and keys, Google Generative AI API key).  
+4. *Local Ollama Setup*:
+   bash
+   ollama serve
+   ollama pull mistral
+   ollama pull nomic-embed-text
+   
+
+5. *Environment Variables*:  
+   Frontend `.env.local`:
+   bash
+   NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+   
+
+   Backend `Backend/.env`:
+   bash
+   OLLAMA_BASE_URL=http://localhost:11434
+   OLLAMA_MODEL=mistral
+   OLLAMA_EMBED_MODEL=nomic-embed-text
+   
+   When running the backend in Docker while Ollama runs on your host machine, set:
+   bash
+   OLLAMA_BASE_URL=http://host.docker.internal:11434
+   
 
 ---
 

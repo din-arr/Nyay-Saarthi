@@ -4,6 +4,8 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/utils/supabase/client"
+import { createLocalSession } from "@/lib/local-auth"
+import { isSupabaseConfigured } from "@/lib/supabase-config"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,24 +22,36 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
-  const supabase = createClient()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    if (error) {
-      setError("Failed to log in. Please check your credentials.")
-      setIsLoading(false)
-    } else {
+    if (!isSupabaseConfigured()) {
+      createLocalSession(email)
       router.push("/dashboard")
       router.refresh()
+      return
+    }
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        setError(error.message || "Failed to log in. Please check your credentials.")
+        setIsLoading(false)
+      } else {
+        router.push("/dashboard")
+        router.refresh()
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to log in. Please try again.")
+      setIsLoading(false)
     }
   }
   // --- END OF LOGIN LOGIC ---

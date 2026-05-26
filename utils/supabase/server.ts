@@ -2,9 +2,14 @@
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { isSupabaseConfigured } from '@/lib/supabase-config'
 
 export function createClient() {
   const cookieStore = cookies()
+
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase is not configured')
+  }
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

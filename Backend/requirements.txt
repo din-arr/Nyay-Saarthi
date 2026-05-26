@@ -3,12 +3,9 @@ uvicorn
 python-multipart
 langchain
 langchain-community
-unstructured[pdf,easyocr] # <-- Update this line
-qdrant-client
-pytesseract
-pdf2image
+langchain-text-splitters
+langchain-ollama
+pypdf
+python-docx
 python-dotenv
-google-generativeai
-langchain-google-genai
-sentence-transformers # <-- Add this for local embeddings
-torch # <-- Add this (required by sentence-transformers)
+ollama

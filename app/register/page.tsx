@@ -4,6 +4,8 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/utils/supabase/client"
+import { createLocalSession } from "@/lib/local-auth"
+import { getSupabaseConfigError, isSupabaseConfigured } from "@/lib/supabase-config"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,7 +28,6 @@ export default function RegisterPage() {
   const [message, setMessage] = useState("")
   
   const router = useRouter()
-  const supabase = createClient()
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,17 +39,28 @@ export default function RegisterPage() {
       return
     }
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
+    if (!isSupabaseConfigured()) {
+      createLocalSession(email)
+      setMessage(`${getSupabaseConfigError()} Local account created.`)
+      setTimeout(() => router.push("/dashboard"), 800)
+      return
+    }
 
-    if (error) {
-      setError(error.message)
-    } else {
-      setMessage("Registration successful! You can now log in.")
-      // Redirect to login after a short delay
-      setTimeout(() => router.push('/login'), 2000)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      })
+
+      if (error) {
+        setError(error.message)
+      } else {
+        setMessage("Registration successful! You can now log in.")
+        setTimeout(() => router.push("/login"), 2000)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to sign up. Please try again.")
     }
   }
   // --- END OF REGISTER LOGIC ---
