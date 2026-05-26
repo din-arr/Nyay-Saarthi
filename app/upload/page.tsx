@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import type React from "react"
 import { useState, useCallback } from "react"
@@ -255,7 +255,7 @@ export default function UploadPage() {
         setUploadedFiles((prev) => prev.map((f) => f.id === fileId ? { ...f, status: "error" } : f))
       }
     }
-  }, [])
+  }, [uploadAndProcessFile]); // Dependency on the combined function
 
   const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true) }, [])
   const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragOver(false) }, [])
@@ -330,6 +330,7 @@ export default function UploadPage() {
           </CardContent>
         </Card>
 
+        {/* Uploaded Files List */}
         {uploadedFiles.length > 0 && (
           <div className="mt-6 space-y-4">
             {uploadedFiles.map((uploadedFile) => (
@@ -365,6 +366,14 @@ export default function UploadPage() {
                     </div>
                   )}
 
+                  {/* Saving State */}
+                  {uploadedFile.status === "saving" && (
+                     <div className="flex items-center gap-2 text-sm text-purple-600">
+                       <Loader2 className="w-4 h-4 animate-spin" />
+                       <span>रिकॉर्ड सहेजा जा रहा है...</span>
+                     </div>
+                  )}
+
                   {uploadedFile.status === "complete" && (
                     <div>
                       <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 mb-2">
@@ -397,5 +406,5 @@ export default function UploadPage() {
         )}
       </div>
     </div>
-  )
+  );
 }

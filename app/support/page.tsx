@@ -171,11 +171,12 @@ export default function SupportPage() {
                       </li>
                     ))}
                   </ul>
-                  <Button className={`w-full bg-gradient-to-r ${plan.color} text-white hover:opacity-90`}>
+                  <Button className={`w-full bg-gradient-to-r ${plan.color} text-white hover:opacity-90`} onClick={()=>router.push('/consultation')}>
                     <CreditCard className="h-4 w-4 mr-2" />
                     {lang === "hi" ? "अभी बुक करें" : "Book Now"}
                   </Button>
                 </CardContent>
+               
               </Card>
             ))}
           </div>

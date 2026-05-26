@@ -13,12 +13,12 @@ export const metadata: Metadata = {
   title: "न्याय-सारथी | Nyay-Saarthi",
   description: "जटिल कानूनी दस्तावेज़ों को सरल भाषा में समझें | Simplify complex legal documents into plain language",
   generator: "Next.js",
-}
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
     <html lang="hi" suppressHydrationWarning>
@@ -39,5 +39,5 @@ export default function RootLayout({
         </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }

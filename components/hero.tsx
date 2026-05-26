@@ -1,4 +1,5 @@
-"use client"
+// components/hero.tsx
+"use client";
 
 import type React from "react"
 import { Button } from "@/components/ui/button"
@@ -202,10 +203,7 @@ export function Hero() {
                 className={`text-center py-12 rounded-2xl transition-all duration-300 ${
                   dragActive ? "bg-green-50 border-2 border-green-300" : ""
                 }`}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
+                // Event handlers moved to parent Card
               >
                 <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl animate-float">
                   <Upload className="w-10 h-10 text-white" />
@@ -261,5 +259,5 @@ export function Hero() {
         </div>
       </div>
     </section>
-  )
+  );
 }

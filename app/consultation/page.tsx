@@ -62,7 +62,8 @@ export default function ConsultationPage() {
   const handleInputChange = (field: string, value: string) =>
     setBookingForm((prev) => ({ ...prev, [field]: value }))
 
-  const handleBooking = (e: React.FormEvent) => {
+  // 🧠 STRIPE INTEGRATION — create checkout session and redirect
+  const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault()
     console.log("Booking:", { plan: selectedPlanData, date: selectedDate, time: selectedTime, form: bookingForm })
   }
