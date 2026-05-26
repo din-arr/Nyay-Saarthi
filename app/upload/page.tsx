@@ -9,10 +9,13 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import {
   Upload, FileText, CheckCircle, X, AlertCircle,
-  Users, Calendar, AlertTriangle, Lightbulb, Shield, MessageSquare, ArrowRight,
+  Users, Calendar, AlertTriangle, Lightbulb, Shield, MessageSquare, ArrowRight, Download,
+  Volume2, VolumeX, HelpCircle, Loader2,
 } from "lucide-react"
 import { apiUrl } from "@/lib/api"
 import { useLanguage } from "@/lib/language-context"
+import { exportAnalysisPdf } from "@/lib/export-pdf"
+import { saveDocument } from "@/lib/supabase-documents"
 
 interface DocumentAnalysis {
   document_type: string
@@ -69,7 +72,7 @@ function RiskGauge({ score, level }: { score: number; level: string }) {
 }
 
 function AnalysisSummary({
-  analysis, verification, onGoToChat,
+  analysis, verification, fileName, onGoToChat,
 }: {
   analysis: DocumentAnalysis
   verification?: VerificationReport
@@ -77,16 +80,90 @@ function AnalysisSummary({
   onGoToChat: () => void
 }) {
   const { t, lang } = useLanguage()
+  const [exporting, setExporting] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
+  const [explanations, setExplanations] = useState<Record<string, { loading: boolean; text: string }>>({})
+
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      await exportAnalysisPdf(fileName, analysis)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleVoice = () => {
+    if (!("speechSynthesis" in window)) return
+    if (speaking) {
+      window.speechSynthesis.cancel()
+      setSpeaking(false)
+      return
+    }
+    const text =
+      lang === "hi"
+        ? `दस्तावेज़ प्रकार: ${analysis.document_type}. जोखिम स्कोर: ${analysis.risk_score} में से 100, ${analysis.risk_level} जोखिम. पक्षकार: ${analysis.parties.join(", ")}. मुख्य धाराएं: ${analysis.key_clauses.slice(0, 2).join(". ")}. जोखिम कारक: ${analysis.risk_factors.slice(0, 2).join(". ")}.`
+        : `Document type: ${analysis.document_type}. Risk score: ${analysis.risk_score} out of 100, ${analysis.risk_level} risk. Parties: ${analysis.parties.join(", ")}. Key clauses: ${analysis.key_clauses.slice(0, 2).join(". ")}. Risk factors: ${analysis.risk_factors.slice(0, 2).join(". ")}.`
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = lang === "hi" ? "hi-IN" : "en-IN"
+    utterance.rate = 0.88
+    utterance.onend = () => setSpeaking(false)
+    utterance.onerror = () => setSpeaking(false)
+    setSpeaking(true)
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const explainClause = async (text: string, key: string) => {
+    if (explanations[key]) {
+      setExplanations((prev) => { const n = { ...prev }; delete n[key]; return n })
+      return
+    }
+    setExplanations((prev) => ({ ...prev, [key]: { loading: true, text: "" } }))
+    try {
+      const res = await fetch(apiUrl("/explain/"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, language: lang }),
+      })
+      const data = await res.json()
+      setExplanations((prev) => ({ ...prev, [key]: { loading: false, text: data.explanation ?? "" } }))
+    } catch {
+      setExplanations((prev) => ({ ...prev, [key]: { loading: false, text: lang === "hi" ? "व्याख्या लोड नहीं हो सकी।" : "Could not load explanation." } }))
+    }
+  }
 
   return (
     <div className="mt-6 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-xl font-bold text-gray-900 dark:text-white">
           {lang === 'hi' ? 'AI विश्लेषण परिणाम' : 'AI Analysis Results'}
         </h3>
-        <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-sm px-3 py-1">
-          {analysis.document_type}
-        </Badge>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-sm px-3 py-1">
+            {analysis.document_type}
+          </Badge>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleVoice}
+            className={speaking
+              ? "border-red-400 text-red-600 dark:text-red-400 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+              : "border-blue-400 text-blue-600 dark:text-blue-400 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"}
+          >
+            {speaking ? <VolumeX className="w-3.5 h-3.5 mr-1" /> : <Volume2 className="w-3.5 h-3.5 mr-1" />}
+            {speaking ? (lang === 'hi' ? 'बंद करें' : 'Stop') : (lang === 'hi' ? 'सुनें' : 'Listen')}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExport}
+            disabled={exporting}
+            className="border-purple-400 text-purple-600 dark:text-purple-400 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+          >
+            <Download className="w-3.5 h-3.5 mr-1" />
+            {exporting ? (lang === 'hi' ? 'बनाया जा रहा है...' : 'Exporting...') : (lang === 'hi' ? 'PDF रिपोर्ट' : 'PDF Report')}
+          </Button>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
@@ -127,13 +204,31 @@ function AnalysisSummary({
             <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('riskFactors')}</span>
           </div>
-          <div className="space-y-1">
-            {analysis.risk_factors.map((risk, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <div className="w-2 h-2 rounded-full bg-red-400 mt-1.5 shrink-0" />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{risk}</span>
-              </div>
-            ))}
+          <div className="space-y-2">
+            {analysis.risk_factors.map((risk, i) => {
+              const key = `risk-${i}`
+              const exp = explanations[key]
+              return (
+                <div key={i}>
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 rounded-full bg-red-400 mt-1.5 shrink-0" />
+                    <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">{risk}</span>
+                    <button
+                      onClick={() => explainClause(risk, key)}
+                      title={lang === 'hi' ? 'सरल भाषा में समझाएं' : 'Explain in plain language'}
+                      className="shrink-0 w-5 h-5 rounded-full bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 flex items-center justify-center hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors"
+                    >
+                      {exp?.loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <HelpCircle className="w-3 h-3" />}
+                    </button>
+                  </div>
+                  {exp && !exp.loading && exp.text && (
+                    <div className="mt-1 ml-4 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2 border border-red-200 dark:border-red-800">
+                      {exp.text}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>
@@ -144,12 +239,30 @@ function AnalysisSummary({
           <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('clauses')}</span>
         </div>
         <div className="space-y-2">
-          {analysis.key_clauses.map((clause, i) => (
-            <div key={i} className="flex items-start gap-2 p-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-100 dark:border-gray-600">
-              <span className="text-xs font-bold text-gray-400 dark:text-gray-500 mt-0.5 shrink-0">{i + 1}.</span>
-              <span className="text-sm text-gray-700 dark:text-gray-300">{clause}</span>
-            </div>
-          ))}
+          {analysis.key_clauses.map((clause, i) => {
+            const key = `clause-${i}`
+            const exp = explanations[key]
+            return (
+              <div key={i} className="p-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-100 dark:border-gray-600">
+                <div className="flex items-start gap-2">
+                  <span className="text-xs font-bold text-gray-400 dark:text-gray-500 mt-0.5 shrink-0">{i + 1}.</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">{clause}</span>
+                  <button
+                    onClick={() => explainClause(clause, key)}
+                    title={lang === 'hi' ? 'सरल भाषा में समझाएं' : 'Explain in plain language'}
+                    className="shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors"
+                  >
+                    {exp?.loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <HelpCircle className="w-3 h-3" />}
+                  </button>
+                </div>
+                {exp && !exp.loading && exp.text && (
+                  <div className="mt-2 ml-5 text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-2 border border-blue-200 dark:border-blue-800">
+                    {exp.text}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -240,9 +353,18 @@ export default function UploadPage() {
           const analysis = data.analysis as DocumentAnalysis
           const verification = data.verification as VerificationReport | undefined
           if (analysis) {
+            const now = new Date().toISOString()
             localStorage.setItem("nyay_document_analysis", JSON.stringify(analysis))
             localStorage.setItem("nyay_document_name", file.name)
-            localStorage.setItem("nyay_upload_time", new Date().toISOString())
+            localStorage.setItem("nyay_upload_time", now)
+            // Save to documents array for compare feature (max 5, localStorage cache)
+            try {
+              const existing = JSON.parse(localStorage.getItem("nyay_documents") ?? "[]")
+              const updated = [{ id: fileId, name: file.name, analysis, uploadedAt: now }, ...existing].slice(0, 5)
+              localStorage.setItem("nyay_documents", JSON.stringify(updated))
+            } catch {}
+            // Persist to Supabase (non-blocking — fails silently if not logged in)
+            saveDocument({ name: file.name, analysis, verification })
           }
           if (verification) localStorage.setItem("nyay_document_verification", JSON.stringify(verification))
           setUploadedFiles((prev) => prev.map((f) => f.id === fileId ? { ...f, status: "complete", progress: 100, analysis, verification } : f))

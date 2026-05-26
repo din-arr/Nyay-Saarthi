@@ -38,6 +38,17 @@ class Query(BaseModel):
     language: str = "hi"
 
 
+class TemplateRequest(BaseModel):
+    template_type: str
+    fields: dict
+    language: str = "hi"
+
+
+class ExplainRequest(BaseModel):
+    text: str
+    language: str = "hi"
+
+
 def call_ollama_json(prompt: str) -> dict:
     try:
         response = ollama_client.chat(
@@ -269,6 +280,43 @@ Answer:"""
             for doc in docs
         ],
     }
+
+
+@app.post("/explain/")
+async def explain_clause(req: ExplainRequest):
+    lang_instruction = (
+        "Explain in simple Hindi (Devanagari script) in 2-3 sentences that a non-lawyer can understand."
+        if req.language == "hi"
+        else "Explain in simple English in 2-3 sentences that a non-lawyer can understand."
+    )
+    prompt = f"""You are a legal expert. {lang_instruction}
+
+Clause or term to explain:
+"{req.text}"
+
+Plain-language explanation:"""
+    result = call_ollama_text(prompt)
+    return {"explanation": result}
+
+
+@app.post("/generate/")
+async def generate_template(req: TemplateRequest):
+    lang_instruction = (
+        "in simple Hindi using Devanagari script. Make it formal and legally appropriate for India."
+        if req.language == "hi"
+        else "in simple English. Make it formal and legally appropriate for India."
+    )
+    fields_text = "\n".join(f"- {k}: {v}" for k, v in req.fields.items() if v)
+    prompt = f"""You are an expert Indian legal document drafter. Generate a complete {req.template_type} {lang_instruction}.
+
+Use the following details:
+{fields_text}
+
+Include all standard clauses required by Indian law, proper signature blocks, witness sections, and clear section headings.
+Generate the complete document:"""
+
+    result = call_ollama_text(prompt)
+    return {"document": result}
 
 
 @app.get("/verify/")
