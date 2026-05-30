@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
-import { Menu, User, LogOut, BarChart3, MessageSquare, Phone, Sun, Moon, UserCircle } from 'lucide-react'
+import { Menu, User, LogOut, BarChart3, MessageSquare, Phone, Sun, Moon, UserCircle, GitCompare, FileEdit, CalendarClock, PieChart } from 'lucide-react'
 import { signOut } from '@/lib/actions'
 import { useLanguage } from '@/lib/language-context'
 import { useTheme } from 'next-themes'
@@ -41,6 +41,10 @@ export function ClientNav({ userEmail, userName }: ClientNavProps) {
   const navLinks = [
     { href: '/dashboard', label: t('dashboard'), icon: BarChart3 },
     { href: '/chat', label: t('aiChat'), icon: MessageSquare },
+    { href: '/analytics', label: lang === 'hi' ? 'Analytics' : 'Analytics', icon: PieChart },
+    { href: '/compare', label: t('compare'), icon: GitCompare },
+    { href: '/templates', label: t('templates'), icon: FileEdit },
+    { href: '/timeline', label: t('timeline'), icon: CalendarClock },
     { href: '/consultation', label: t('consultation'), icon: User },
     { href: '/support', label: t('support'), icon: Phone },
   ]
@@ -70,7 +74,7 @@ export function ClientNav({ userEmail, userName }: ClientNavProps) {
   return (
     <>
       {/* ── Desktop nav ── */}
-      <nav className="hidden md:flex items-center gap-5">
+      <nav className="hidden md:flex items-center gap-3">
         {navLinks.map(link => (
           <Link
             key={link.href}

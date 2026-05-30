@@ -1,5 +1,4 @@
-// app/chat/page.tsx
-"use client";
+"use client"
 
 import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -190,9 +189,9 @@ export default function ChatPage() {
         timestamp: new Date(),
       }])
     } finally {
-      setIsTyping(false);
+      setIsTyping(false)
     }
-  };
+  }
 
   const formatTime = (date: Date) =>
     date.toLocaleTimeString(lang === 'hi' ? "hi-IN" : "en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
@@ -203,41 +202,6 @@ export default function ChatPage() {
 
   const questions = analysis?.suggested_questions?.length ? analysis.suggested_questions : defaultQuestions
 
-  // --- Copy Function ---
-  const handleCopy = (content: string, messageId: string | number) => {
-    navigator.clipboard.writeText(content).then(() => {
-      setCopiedMessageId(messageId);
-      toast.success("Message copied to clipboard!");
-      setTimeout(() => setCopiedMessageId(null), 1500); // Reset icon after 1.5s
-    }).catch(err => {
-      console.error('Failed to copy text: ', err);
-      toast.error("Failed to copy message.");
-    });
-  };
-
-  // --- Clear Chat Function ---
-  const handleClearChat = () => {
-    // Optional: Clear context from localStorage too
-     try {
-         localStorage.removeItem(LOCALSTORAGE_CONTEXT_KEY);
-         console.log("Cleared context from localStorage"); // Debug log
-     } catch (e) {
-         console.warn("localStorage not available or failed to remove item.");
-     }
-     setContextFileName(null); // Clear context state immediately
-    // Reset messages based on the now-cleared context
-    setMessages(getInitialMessages());
-    toast.info("Chat history and context cleared.");
-  };
-
-  // --- Placeholder Feedback Function ---
-  const handleFeedback = (messageId: string | number, feedback: 'good' | 'bad') => {
-      console.log(`Feedback for message ${messageId}: ${feedback}`);
-      toast.info("धन्यवाद! आपका फ़ीडबैक दर्ज कर लिया गया है।"); // Simple feedback
-      // Here you would typically send this feedback to your backend API
-  };
-
-  // --- JSX ---
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       <div className="flex h-[calc(100vh-80px)]">
@@ -272,7 +236,6 @@ export default function ChatPage() {
               </div>
             </div>
           </div>
-        </div>
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -371,29 +334,7 @@ export default function ChatPage() {
                 </div>
               </div>
             </div>
-          ))}
-
-          {/* Typing Indicator */}
-          {isTyping && (
-             <div className="flex justify-start">
-               <div className="flex items-start gap-3 max-w-2xl">
-                 <Avatar className="h-8 w-8 flex-shrink-0">
-                   <AvatarFallback className="bg-green-100 text-green-600">
-                     <Bot className="h-4 w-4" />
-                   </AvatarFallback>
-                 </Avatar>
-                 <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                   <div className="flex space-x-1.5">
-                     <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                     <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-75"></div>
-                     <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-150"></div>
-                   </div>
-                 </div>
-               </div>
-             </div>
           )}
-          <div ref={messagesEndRef} />
-        </div>
 
           {/* Input */}
           <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-6 py-4 shrink-0">
@@ -414,33 +355,7 @@ export default function ChatPage() {
               </Button>
             </div>
           </div>
-        )}
-
-        {/* Input Area */}
-        <div className="border-t border-gray-200 bg-white p-4 md:p-6">
-          <div className="flex items-center gap-2 md:gap-4">
-            <div className="flex-1 relative">
-              <Input
-                placeholder="अपना प्रश्न यहाँ लिखें..."
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyPress={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } } }
-                className="pr-12 h-10 md:h-11"
-                disabled={isTyping}
-              />
-              <Button
-                size="icon"
-                onClick={handleSendMessage}
-                disabled={!inputMessage.trim() || isTyping}
-                className="absolute right-1.5 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300"
-                aria-label="Send message"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
         </div>
-      </div>
 
         {/* Sidebar */}
         <div className="w-72 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 p-4 overflow-y-auto hidden lg:block shrink-0">
@@ -549,19 +464,7 @@ export default function ChatPage() {
             )}
           </div>
         </div>
-      </TooltipProvider>
-      {/* --- End Sidebar --- */}
+      </div>
     </div>
-  );
+  )
 }
-
-// Export default wrapper using Suspense for useSearchParams
-export default function ChatPage() {
-    return (
-        // Added Suspense wrapper for ChatComponent
-        <Suspense fallback={<div className="flex h-[calc(100vh-80px)] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>}>
-            <ChatComponent />
-        </Suspense>
-    );
-}
-

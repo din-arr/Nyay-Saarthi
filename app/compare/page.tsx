@@ -1,269 +1,316 @@
-// app/compare/page.tsx
-"use client";
+"use client"
 
-import React, { useState, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, FileText, X, Loader2, GitCompareArrows, AlertTriangle } from "lucide-react"; // Added GitCompareArrows, AlertTriangle
-import { toast } from "sonner";
-import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer'; // Import the diff viewer
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import {
+  Upload, FileText, AlertTriangle, Shield, TrendingUp,
+  CheckCircle, XCircle, Trophy, Users, Calendar, GitCompare,
+} from "lucide-react"
+import { useLanguage } from "@/lib/language-context"
+import { getDocuments, isSupabaseUser } from "@/lib/supabase-documents"
 
-interface CompareFile {
-  file: File;
-  id: string; // Simple ID for UI key
+interface DocumentAnalysis {
+  document_type: string
+  parties: string[]
+  key_dates: string[]
+  key_clauses: string[]
+  risk_score: number
+  risk_level: "Low" | "Medium" | "High"
+  risk_factors: string[]
+  suggested_questions: string[]
+}
+
+interface StoredDoc {
+  id: string
+  name: string
+  analysis: DocumentAnalysis
+  uploadedAt: string
+}
+
+function RiskChip({ level }: { level: string }) {
+  const map = {
+    Low: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-200 dark:border-green-700",
+    High: "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 border-red-200 dark:border-red-700",
+    Medium: "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-700",
+  } as Record<string, string>
+  return (
+    <Badge className={`border text-xs ${map[level] ?? map.Medium}`}>
+      <Shield className="w-3 h-3 mr-1" />
+      {level}
+    </Badge>
+  )
+}
+
+function ScoreBar({ score, level, winner }: { score: number; level: string; winner: boolean }) {
+  const color = level === "Low" ? "bg-green-500" : level === "High" ? "bg-red-500" : "bg-orange-500"
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-3">
+        <div className={`h-3 rounded-full transition-all duration-700 ${color}`} style={{ width: `${score}%` }} />
+      </div>
+      <span className="text-sm font-bold text-gray-700 dark:text-gray-300 w-10">{score}</span>
+      {winner && <Trophy className="w-4 h-4 text-yellow-500" />}
+    </div>
+  )
+}
+
+function DocColumn({ doc, isWinner, lang }: { doc: StoredDoc; isWinner: boolean; lang: string }) {
+  const { analysis } = doc
+  return (
+    <div className={`space-y-4 flex-1 min-w-0 ${isWinner ? "ring-2 ring-green-400 dark:ring-green-600 rounded-xl p-1" : ""}`}>
+      {isWinner && (
+        <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg px-3 py-1.5">
+          <Trophy className="w-4 h-4 text-yellow-500" />
+          <span className="text-xs font-bold text-green-700 dark:text-green-400">
+            {lang === "hi" ? "कम जोखिम — बेहतर दस्तावेज़" : "Lower Risk — Better Document"}
+          </span>
+        </div>
+      )}
+
+      {/* Doc header */}
+      <Card className="bg-white dark:bg-gray-800 border-0 dark:border dark:border-gray-700 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/40 rounded-lg flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5 text-green-600 dark:text-green-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-gray-800 dark:text-white text-sm truncate">{doc.name}</p>
+              <Badge variant="secondary" className="mt-1 text-xs dark:bg-gray-700 dark:text-gray-300">
+                {analysis.document_type}
+              </Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Risk Score */}
+      <Card className="bg-white dark:bg-gray-800 border-0 dark:border dark:border-gray-700 shadow-sm">
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+              {lang === "hi" ? "जोखिम स्कोर" : "Risk Score"}
+            </p>
+            <RiskChip level={analysis.risk_level} />
+          </div>
+          <ScoreBar score={analysis.risk_score} level={analysis.risk_level} winner={isWinner} />
+        </CardContent>
+      </Card>
+
+      {/* Parties */}
+      <Card className="bg-white dark:bg-gray-800 border-0 dark:border dark:border-gray-700 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Users className="w-4 h-4 text-blue-500" />
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+              {lang === "hi" ? "पक्षकार" : "Parties"}
+            </p>
+          </div>
+          <div className="space-y-1">
+            {analysis.parties.slice(0, 3).map((p, i) => (
+              <p key={i} className="text-xs text-gray-700 dark:text-gray-300 truncate">• {p}</p>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Key Dates */}
+      <Card className="bg-white dark:bg-gray-800 border-0 dark:border dark:border-gray-700 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar className="w-4 h-4 text-purple-500" />
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+              {lang === "hi" ? "मुख्य तिथियाँ" : "Key Dates"}
+            </p>
+          </div>
+          <div className="space-y-1">
+            {analysis.key_dates.slice(0, 3).map((d, i) => (
+              <p key={i} className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2">• {d}</p>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Clauses vs Risk Factors */}
+      <Card className="bg-white dark:bg-gray-800 border-0 dark:border dark:border-gray-700 shadow-sm">
+        <CardContent className="p-4 space-y-1">
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
+            {lang === "hi" ? "क्लॉज़ और जोखिम" : "Clauses & Risks"}
+          </p>
+          {analysis.key_clauses.slice(0, 2).map((c, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <CheckCircle className="w-3 h-3 text-green-500 shrink-0 mt-0.5" />
+              <span className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1">{c}</span>
+            </div>
+          ))}
+          {analysis.risk_factors.slice(0, 2).map((r, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <XCircle className="w-3 h-3 text-red-400 shrink-0 mt-0.5" />
+              <span className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1">{r}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Counts */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: lang === "hi" ? "तिथियाँ" : "Dates", val: analysis.key_dates.length, color: "text-purple-600 dark:text-purple-400" },
+          { label: lang === "hi" ? "धाराएँ" : "Clauses", val: analysis.key_clauses.length, color: "text-blue-600 dark:text-blue-400" },
+          { label: lang === "hi" ? "जोखिम" : "Risks", val: analysis.risk_factors.length, color: "text-red-600 dark:text-red-400" },
+        ].map((s) => (
+          <div key={s.label} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg p-2 text-center">
+            <p className={`text-lg font-bold ${s.color}`}>{s.val}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{s.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function ComparePage() {
-  const [file1, setFile1] = useState<CompareFile | null>(null);
-  const [file2, setFile2] = useState<CompareFile | null>(null);
-  const [isComparing, setIsComparing] = useState(false);
-  const [comparisonResult, setComparisonResult] = useState<string[] | null>(null); // Store raw diff lines
-  const [error, setError] = useState<string | null>(null);
+  const [docs, setDocs] = useState<StoredDoc[]>([])
+  const router = useRouter()
+  const { lang } = useLanguage()
 
-  // --- File Handling Logic ---
-  const handleFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    fileNumber: 1 | 2
-  ) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const newFile = { file, id: file.name + Date.now() }; // Simple unique ID
-      if (fileNumber === 1) setFile1(newFile);
-      else setFile2(newFile);
-      setComparisonResult(null); // Clear previous results
-      setError(null);
-    }
-    e.target.value = ""; // Reset input
-  };
-
-  const removeFile = (fileNumber: 1 | 2) => {
-    if (fileNumber === 1) setFile1(null);
-    else setFile2(null);
-    setComparisonResult(null); // Clear results when a file is removed
-    setError(null);
-  };
-
-  // --- Drag and Drop Logic (Simplified) ---
-  const handleDrop = (e: React.DragEvent, fileNumber: 1 | 2) => {
-    e.preventDefault();
-    e.stopPropagation(); // Prevent parent handlers
-    e.currentTarget.classList.remove('border-primary', 'bg-primary/10'); // Remove drag over styles
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      const newFile = { file, id: file.name + Date.now() };
-      if (fileNumber === 1) setFile1(newFile);
-      else setFile2(newFile);
-      setComparisonResult(null);
-      setError(null);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.currentTarget.classList.add('border-primary', 'bg-primary/10'); // Add drag over style
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-     e.currentTarget.classList.remove('border-primary', 'bg-primary/10'); // Remove drag over style
-  };
-
-  // --- Comparison API Call ---
-  const handleCompare = async () => {
-    if (!file1 || !file2) {
-      toast.error("कृपया तुलना करने के लिए दोनों फाइलें अपलोड करें।");
-      return;
-    }
-
-    setIsComparing(true);
-    setComparisonResult(null);
-    setError(null);
-    const toastId = toast.loading("दस्तावेजों की तुलना की जा रही है...");
-
-    const formData = new FormData();
-    formData.append("file1", file1.file);
-    formData.append("file2", file2.file);
-
-    try {
-      // Replace with your actual backend URL if different
-      const response = await fetch("https://parrth020-nyay-saarthi-ai-agent.hf.space/compare/", {
-        method: "POST",
-        body: formData,
-        // mode: "cors", // Enable if backend runs on a different origin
-      });
-
-      if (!response.ok) {
-        let errorMsg = `Comparison failed: ${response.statusText}`;
-        try {
-            const errData = await response.json();
-            errorMsg = errData.detail || errorMsg; // Use detail from backend if available
-        } catch (_) {} // Ignore if response is not JSON
-        throw new Error(errorMsg);
+  useEffect(() => {
+    async function load() {
+      const sbUser = await isSupabaseUser()
+      if (sbUser) {
+        const sbDocs = await getDocuments()
+        if (sbDocs.length > 0) {
+          setDocs(sbDocs.map((d) => ({ id: d.id, name: d.name, analysis: d.analysis, uploadedAt: d.uploaded_at })))
+          return
+        }
       }
-
-      const data = await response.json();
-      setComparisonResult(data.comparison_lines || []); // Expecting 'comparison_lines'
-      toast.success("तुलना पूर्ण हुई!", { id: toastId });
-
-    } catch (err: any) {
-      console.error("Comparison error:", err);
-      setError(err.message || "An unknown error occurred during comparison.");
-      toast.error("तुलना विफल हुई", { id: toastId, description: err.message });
-    } finally {
-      setIsComparing(false);
+      // localStorage fallback
+      try {
+        const raw = localStorage.getItem("nyay_documents")
+        if (raw) setDocs(JSON.parse(raw))
+      } catch {}
     }
-  };
+    load()
+  }, [])
 
-  // --- Render File Input Area ---
-  const renderFileInput = (fileNumber: 1 | 2, currentFile: CompareFile | null) => (
-    <Card
-      className="border-2 border-dashed border-border hover:border-primary/50 transition-all duration-200"
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={(e) => handleDrop(e, fileNumber)}
-    >
-      <CardContent className="p-6 text-center min-h-[200px] flex flex-col justify-center items-center">
-        {currentFile ? (
-          <div className="w-full">
-            <div className="flex items-center gap-3 bg-gray-100 p-3 rounded-md border border-gray-200 w-full relative">
-              <FileText className="w-6 h-6 text-primary flex-shrink-0" />
-              <div className="flex-grow overflow-hidden text-left">
-                <p className="font-medium truncate text-sm" title={currentFile.file.name}>
-                  {currentFile.file.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  ({(currentFile.file.size / 1024).toFixed(1)} KB)
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeFile(fileNumber)}
-                className="text-muted-foreground hover:text-destructive h-7 w-7 absolute top-1 right-1"
-                aria-label="Remove file"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+  const hi = lang === "hi"
+
+  if (docs.length < 2) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+        <div className="max-w-3xl mx-auto px-4 py-16 text-center space-y-6">
+          <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center mx-auto shadow-lg">
+            <GitCompare className="w-10 h-10 text-white" />
           </div>
-        ) : (
-          <>
-            <Upload className="w-10 h-10 text-muted-foreground mb-3" />
-            <p className="text-muted-foreground text-sm mb-3">
-              दस्तावेज़ {fileNumber} खींचें या चुनें
-            </p>
-            <input
-              type="file"
-              id={`file-upload-${fileNumber}`}
-              className="hidden"
-              accept=".pdf,.docx,.txt,.md" // Common text-based formats
-              onChange={(e) => handleFileChange(e, fileNumber)}
-            />
-            <label htmlFor={`file-upload-${fileNumber}`}>
-              <Button size="sm" variant="outline" asChild className="cursor-pointer">
-                <span>फाइल चुनें</span>
-              </Button>
-            </label>
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {hi ? "दस्तावेज़ तुलना" : "Document Comparison"}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
+            {hi
+              ? `तुलना के लिए कम से कम 2 दस्तावेज़ चाहिए। अभी ${docs.length}/2 हैं।`
+              : `At least 2 documents needed to compare. You have ${docs.length}/2.`}
+          </p>
+          <Button
+            onClick={() => router.push("/upload")}
+            className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            {hi ? "दस्तावेज़ अपलोड करें" : "Upload Document"}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const [docA, docB] = docs
+  const winnerA = docA.analysis.risk_score <= docB.analysis.risk_score
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50/30 via-blue-50/30 to-purple-50/30">
-      <div className="container mx-auto max-w-6xl px-4 py-8">
-        <Card className="shadow-lg border-0 rounded-xl bg-white overflow-hidden mb-8">
-           <CardHeader>
-             <CardTitle className="text-2xl md:text-3xl font-bold flex items-center gap-3">
-                <GitCompareArrows className="h-7 w-7 text-indigo-600"/>
-                दस्तावेज़ों की तुलना करें
-             </CardTitle>
-             <CardDescription>दो दस्तावेज़ संस्करण अपलोड करें और उनके बीच के अंतर देखें।</CardDescription>
-           </CardHeader>
-           <CardContent className="space-y-6">
-                {/* File Input Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {renderFileInput(1, file1)}
-                  {renderFileInput(2, file2)}
-                </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center">
+              <GitCompare className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {hi ? "दस्तावेज़ तुलना" : "Document Comparison"}
+            </h1>
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {hi ? "दो हालिया दस्तावेज़ों की AI-तुलना" : "AI-powered side-by-side comparison of your last 2 documents"}
+          </p>
+        </div>
 
-                {/* Compare Button */}
-                <div className="text-center">
-                    <Button
-                    size="lg"
-                    onClick={handleCompare}
-                    disabled={!file1 || !file2 || isComparing}
-                    className="px-8 py-3 text-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md transition-transform transform hover:scale-105"
-                    >
-                    {isComparing ? (
-                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    ) : (
-                        <GitCompareArrows className="w-5 h-5 mr-2" />
-                    )}
-                    {isComparing ? "तुलना हो रही है..." : "अब तुलना करें"}
-                    </Button>
-                </div>
-            </CardContent>
+        {/* VS header */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="flex-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl px-4 py-2 text-center">
+            <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">{docA.name}</p>
+          </div>
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center shrink-0 shadow-md">
+            <span className="text-white text-xs font-bold">VS</span>
+          </div>
+          <div className="flex-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl px-4 py-2 text-center">
+            <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">{docB.name}</p>
+          </div>
+        </div>
+
+        {/* Comparison columns */}
+        <div className="flex gap-4">
+          <DocColumn doc={docA} isWinner={winnerA} lang={lang} />
+          <DocColumn doc={docB} isWinner={!winnerA} lang={lang} />
+        </div>
+
+        {/* Summary */}
+        <Card className="mt-8 bg-white dark:bg-gray-800 border-0 dark:border dark:border-gray-700 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-gray-800 dark:text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-green-600" />
+              {hi ? "तुलना सारांश" : "Comparison Summary"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{hi ? "जोखिम अंतर" : "Risk Difference"}</p>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {Math.abs(docA.analysis.risk_score - docB.analysis.risk_score)}
+                </p>
+                <p className="text-xs text-gray-400">{hi ? "अंक" : "points"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{hi ? "बेहतर दस्तावेज़" : "Better Document"}</p>
+                <p className="text-sm font-bold text-green-600 dark:text-green-400 truncate">
+                  {winnerA ? docA.name : docB.name}
+                </p>
+                <p className="text-xs text-gray-400">{hi ? "कम जोखिम" : "lower risk"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{hi ? "कुल जोखिम कारक" : "Total Risk Factors"}</p>
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                  {docA.analysis.risk_factors.length + docB.analysis.risk_factors.length}
+                </p>
+                <p className="text-xs text-gray-400">{hi ? "दोनों में" : "across both"}</p>
+              </div>
+            </div>
+          </CardContent>
         </Card>
 
-        {/* Comparison Result Area */}
-        {error && (
-            <Card className="border-destructive bg-destructive/10 text-destructive-foreground p-4">
-                <CardHeader className="p-0 pb-2">
-                    {/* Corrected Error Display */}
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5"/> Error
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 text-sm">
-                    {error}
-                </CardContent>
-            </Card>
-        )}
-
-        {comparisonResult && (
-          <Card className="shadow-lg border-0 rounded-xl bg-white overflow-hidden">
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold">तुलना परिणाम</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {comparisonResult.length === 0 ? (
-                 <p className="text-center text-muted-foreground py-8">कोई अंतर नहीं मिला। दोनों फाइलें समान हैं।</p>
-              ) : (
-                <div className="overflow-x-auto border rounded-md p-2 bg-gray-50/50">
-                   {/* ReactDiffViewer Integration - Ensure parsing logic is suitable */}
-                   <ReactDiffViewer
-                       // This basic filtering might need adjustment based on ReactDiffViewer's expected input
-                       // It attempts to create rough "old" and "new" strings from the unified diff lines
-                       oldValue={comparisonResult
-                           .filter(line => !line.startsWith('+') || line.startsWith('---') || line.startsWith('@@')) // Keep unchanged, removed, headers
-                           .map(line => line.startsWith('-') ? line.substring(1) : line) // Remove leading '-'
-                           .join('')}
-                       newValue={comparisonResult
-                           .filter(line => !line.startsWith('-') || line.startsWith('+++') || line.startsWith('@@')) // Keep unchanged, added, headers
-                           .map(line => line.startsWith('+') ? line.substring(1) : line) // Remove leading '+'
-                           .join('')}
-                       splitView={true} // Show side-by-side view
-                       compareMethod={DiffMethod.LINES} // Compare line by line
-                       leftTitle={file1?.file.name ?? "मूल दस्तावेज़"}
-                       rightTitle={file2?.file.name ?? "संशोधित दस्तावेज़"}
-                       styles={{ // Optional: Customize styles
-                         diffContainer: { /* CSS for the main container */ },
-                         diffRemoved: { backgroundColor: '#ffebe9', /* pinkish for removed */ },
-                         diffAdded: { backgroundColor: '#e6ffed', /* greenish for added */ },
-                         line: { /* Styles for each line */ },
-                         // Add more style overrides as needed
-                       }}
-                       // Optional: Use line numbers
-                       // showLineNumbers={true}
-                   />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+        <div className="mt-6 flex gap-3 justify-center">
+          <Button variant="outline" onClick={() => router.push("/upload")}
+            className="border-green-600 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
+            <Upload className="w-4 h-4 mr-2" />
+            {hi ? "नया दस्तावेज़" : "New Document"}
+          </Button>
+          <Button variant="outline" onClick={() => router.push("/dashboard")}
+            className="dark:border-gray-600 dark:text-gray-300">
+            {hi ? "डैशबोर्ड" : "Dashboard"}
+          </Button>
+        </div>
       </div>
     </div>
-  );
+  )
 }

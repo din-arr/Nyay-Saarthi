@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 
 export type Lang = 'hi' | 'en'
 
@@ -49,6 +49,13 @@ export const translations = {
     clauses: 'मुख्य धाराएँ',
     riskFactors: 'जोखिम कारक',
     suggestedQuestions: 'सुझाए गए प्रश्न',
+    // New features
+    compare: 'तुलना',
+    templates: 'टेम्पलेट',
+    timeline: 'समयरेखा',
+    downloadReport: 'रिपोर्ट डाउनलोड',
+    generateDoc: 'दस्तावेज़ बनाएं',
+    selectTemplate: 'टेम्पलेट चुनें',
   },
   en: {
     // Nav
@@ -94,6 +101,13 @@ export const translations = {
     clauses: 'Key Clauses',
     riskFactors: 'Risk Factors',
     suggestedQuestions: 'Suggested Questions',
+    // New features
+    compare: 'Compare',
+    templates: 'Templates',
+    timeline: 'Timeline',
+    downloadReport: 'Download Report',
+    generateDoc: 'Generate Document',
+    selectTemplate: 'Select Template',
   },
 } as const
 
@@ -112,7 +126,18 @@ const LanguageContext = createContext<LanguageContextValue>({
 })
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>('hi')
+  const [lang, setLangState] = useState<Lang>('hi')
+
+  useEffect(() => {
+    const saved = localStorage.getItem('nyay_lang') as Lang | null
+    if (saved === 'hi' || saved === 'en') setLangState(saved)
+  }, [])
+
+  const setLang = (l: Lang) => {
+    setLangState(l)
+    localStorage.setItem('nyay_lang', l)
+  }
+
   const t = (key: TranslationKey): string => translations[lang][key]
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>

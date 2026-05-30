@@ -240,9 +240,6 @@
   animation-delay: 0.4s;
 }
 
-*{
-  cursor: none !important; /* hides default cursor */
-}
 
 [data-scroll-container] {
   min-height: 100vh;
