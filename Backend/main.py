@@ -4,6 +4,7 @@ import shutil
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -63,6 +64,26 @@ class CompareRequest(BaseModel):
     doc_a_analysis: dict
     doc_b_name: str
     doc_b_analysis: dict
+    language: str = "hi"
+
+
+class RedFlagRequest(BaseModel):
+    language: str = "hi"
+
+
+class TranslateRequest(BaseModel):
+    text: str
+    target_language: str  # "hindi", "english", "bengali", "tamil", "marathi"
+    language: str = "hi"
+
+
+class GeneralAskRequest(BaseModel):
+    question: str
+    language: str = "hi"
+
+
+class NegotiateRequest(BaseModel):
+    clause: str
     language: str = "hi"
 
 
@@ -293,6 +314,113 @@ Answer:"""
     }
 
 
+def _stream_ollama(prompt: str):
+    """Shared generator: yields SSE chunks from Ollama streaming chat."""
+    try:
+        stream = ollama_client.chat(
+            model=OLLAMA_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            stream=True,
+            options={"temperature": 0},
+        )
+        for chunk in stream:
+            if isinstance(chunk, dict):
+                content = chunk.get("message", {}).get("content", "")
+            else:
+                msg = getattr(chunk, "message", None)
+                content = (msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")) or ""
+            if content:
+                yield f"data: {json.dumps({'content': content})}\n\n"
+    except Exception as e:
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    yield "data: [DONE]\n\n"
+
+
+SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "X-Accel-Buffering": "no",
+    "Connection": "keep-alive",
+}
+
+
+@app.post("/ask-stream/")
+async def ask_question_stream(query: Query):
+    global vectorstore
+    if not vectorstore:
+        async def no_doc():
+            yield f"data: {json.dumps({'error': 'कोई दस्तावेज़ नहीं मिला। पहले अपलोड करें।' if query.language == 'hi' else 'No document loaded. Please upload first.'})}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(no_doc(), media_type="text/event-stream", headers=SSE_HEADERS)
+
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+    docs = retriever.invoke(query.question)
+    context = "\n\n".join([doc.page_content for doc in docs])
+    sources = [{"content": d.page_content[:200], "page": d.metadata.get("page_number", 1)} for d in docs]
+
+    lang_instruction = (
+        "Answer in simple Hindi. Use Devanagari script."
+        if query.language == "hi"
+        else "Answer in simple English."
+    )
+    prompt = f"""You are a helpful legal assistant. Use the context below to answer the question.
+{lang_instruction}
+If you don't know the answer from the context, say so — don't make things up.
+Use **bold** for important terms and - for bullet points where appropriate.
+
+Context:
+{context}
+
+Question: {query.question}
+
+Answer:"""
+
+    def generate():
+        # Send sources first so frontend can show them immediately
+        yield f"data: {json.dumps({'sources': sources})}\n\n"
+        yield from _stream_ollama(prompt)
+
+    return StreamingResponse(generate(), media_type="text/event-stream", headers=SSE_HEADERS)
+
+
+@app.post("/general-ask-stream/")
+async def general_ask_stream(req: GeneralAskRequest):
+    lang_instruction = (
+        "Answer in simple Hindi using Devanagari script. Use bullet points where helpful."
+        if req.language == "hi"
+        else "Answer in simple English. Use bullet points where helpful."
+    )
+    prompt = f"""You are an expert on Indian law with deep knowledge of IPC, Constitution of India, Consumer Protection Act, Transfer of Property Act, Indian Contract Act, CrPC, Motor Vehicles Act, IT Act, and other central and state laws.
+{lang_instruction}
+Answer the following legal question accurately. If the question involves a specific legal section or act, cite it precisely. Do not make up laws.
+
+Question: {req.question}
+
+Answer:"""
+
+    return StreamingResponse(_stream_ollama(prompt), media_type="text/event-stream", headers=SSE_HEADERS)
+
+
+@app.post("/translate-stream/")
+async def translate_stream(req: TranslateRequest):
+    lang_map = {
+        "hindi": "Hindi (Devanagari script)", "english": "English",
+        "bengali": "Bengali (বাংলা script)", "tamil": "Tamil (தமிழ் script)",
+        "marathi": "Marathi (Devanagari script)", "gujarati": "Gujarati (ગુજરાતી script)",
+        "punjabi": "Punjabi (Gurmukhi script)",
+    }
+    target = lang_map.get(req.target_language.lower(), req.target_language)
+    prompt = f"""You are a professional legal translator. Translate the following legal text into {target}.
+Preserve the legal meaning exactly. Keep party names, dates, and amounts unchanged.
+Do not add explanations — output only the translated text.
+
+Text:
+{req.text[:3000]}
+
+Translation in {target}:"""
+
+    return StreamingResponse(_stream_ollama(prompt), media_type="text/event-stream", headers=SSE_HEADERS)
+
+
 @app.post("/explain/")
 async def explain_clause(req: ExplainRequest):
     lang_instruction = (
@@ -421,6 +549,122 @@ async def verify_document():
         }
 
     return {"report": await verify_document_text(document_text)}
+
+
+@app.post("/scan-red-flags/")
+async def scan_red_flags(req: RedFlagRequest):
+    global document_text
+    if not document_text:
+        return {"red_flags": [], "error": "No document loaded. Please upload a document first."}
+
+    lang_instruction = (
+        "Respond in simple Hindi using Devanagari script."
+        if req.language == "hi"
+        else "Respond in simple English."
+    )
+
+    prompt = f"""You are an expert Indian legal auditor. Analyze the document below for clauses that are:
+1. Illegal or void under Indian law (IPC, Consumer Protection Act 2019, Transfer of Property Act, Indian Contract Act, Rent Control Acts)
+2. Unfair, one-sided, or exploitative to one party
+3. Non-standard or unusual compared to typical Indian legal practice
+4. Missing required clauses (e.g., no dispute resolution, no termination notice period)
+
+{lang_instruction}
+Return ONLY a valid JSON array. Each item must have:
+- "clause": the exact problematic text (short excerpt)
+- "issue": what is wrong with it
+- "law": which Indian law or act is violated or relevant
+- "severity": "Critical", "High", or "Medium"
+- "suggestion": a brief fix recommendation
+
+Document:
+{document_text[:4000]}
+
+Return ONLY a JSON array like:
+[{{"clause": "...", "issue": "...", "law": "...", "severity": "High", "suggestion": "..."}}]"""
+
+    try:
+        result = call_ollama_json(prompt)
+        if isinstance(result, list):
+            return {"red_flags": result}
+        if isinstance(result, dict) and "red_flags" in result:
+            return result
+        return {"red_flags": []}
+    except Exception as e:
+        return {"red_flags": [], "error": str(e)}
+
+
+@app.post("/translate/")
+async def translate_document(req: TranslateRequest):
+    lang_map = {
+        "hindi": "Hindi (Devanagari script)",
+        "english": "English",
+        "bengali": "Bengali (বাংলা script)",
+        "tamil": "Tamil (தமிழ் script)",
+        "marathi": "Marathi (Devanagari script)",
+        "gujarati": "Gujarati (ગુજરાતી script)",
+        "punjabi": "Punjabi (Gurmukhi script)",
+    }
+    target = lang_map.get(req.target_language.lower(), req.target_language)
+
+    prompt = f"""You are a professional legal translator. Translate the following legal text into {target}.
+Preserve the legal meaning exactly. Keep party names, dates, and amounts unchanged.
+Do not add explanations — output only the translated text.
+
+Text to translate:
+{req.text[:3000]}
+
+Translation in {target}:"""
+
+    result = call_ollama_text(prompt)
+    return {"translated": result, "target_language": target}
+
+
+@app.post("/general-ask/")
+async def general_ask(req: GeneralAskRequest):
+    lang_instruction = (
+        "Answer in simple Hindi using Devanagari script. Use bullet points where helpful."
+        if req.language == "hi"
+        else "Answer in simple English. Use bullet points where helpful."
+    )
+
+    prompt = f"""You are an expert on Indian law with deep knowledge of the Indian Penal Code (IPC), Constitution of India, Consumer Protection Act, Transfer of Property Act, Indian Contract Act, CrPC, Motor Vehicles Act, IT Act, and other central and state laws.
+
+{lang_instruction}
+Answer the following legal question accurately. If the question involves a specific legal section or act, cite it precisely.
+Do not make up laws — if you are uncertain, say so.
+
+Question: {req.question}
+
+Answer:"""
+
+    result = call_ollama_text(prompt)
+    return {"answer": result}
+
+
+@app.post("/negotiate-clause/")
+async def negotiate_clause(req: NegotiateRequest):
+    lang_instruction = (
+        "Respond in simple Hindi using Devanagari script."
+        if req.language == "hi"
+        else "Respond in simple English."
+    )
+
+    prompt = f"""You are an expert Indian legal negotiator. The following clause from a contract is unfair or risky.
+{lang_instruction}
+
+Risky clause:
+"{req.clause}"
+
+Provide:
+1. Why this clause is problematic (1-2 sentences)
+2. A fair alternative wording that protects both parties under Indian law
+3. A negotiation tip — what to say to the other party to get them to accept the change
+
+Format your response clearly with these three sections."""
+
+    result = call_ollama_text(prompt)
+    return {"suggestion": result}
 
 
 @app.get("/")

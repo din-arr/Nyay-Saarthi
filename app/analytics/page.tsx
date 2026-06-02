@@ -52,18 +52,15 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     async function load() {
-      const sbUser = await isSupabaseUser()
-      if (sbUser) {
-        const sbDocs = await getDocuments()
+      const sbDocs = await getDocuments()
+      if (sbDocs.length > 0) {
         setDocs(sbDocs.map((d: DocumentRecord) => ({ id: d.id, name: d.name, analysis: d.analysis, uploadedAt: d.uploaded_at })))
-        setLoading(false)
-        return
+      } else {
+        try {
+          const raw = localStorage.getItem("nyay_documents")
+          if (raw) setDocs(JSON.parse(raw))
+        } catch {}
       }
-      // localStorage fallback
-      try {
-        const raw = localStorage.getItem("nyay_documents")
-        if (raw) setDocs(JSON.parse(raw))
-      } catch {}
       setLoading(false)
     }
     load()

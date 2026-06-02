@@ -119,12 +119,14 @@ export default function ChatPage() {
       // Load all docs for the picker
       let docs: StoredDoc[] = []
       const sbUser = await isSupabaseUser()
-      if (sbUser) {
-        const sbDocs = await getDocuments()
+      const sbDocs = await getDocuments()
+      if (sbDocs.length > 0) {
         docs = sbDocs.map((d) => ({ id: d.id, name: d.name, analysis: d.analysis, uploadedAt: d.uploaded_at }))
-      }
-      if (!docs.length) {
-        try { const raw = localStorage.getItem("nyay_documents"); if (raw) docs = JSON.parse(raw) } catch {}
+      } else {
+        try {
+          const raw = localStorage.getItem("nyay_documents")
+          if (raw) docs = JSON.parse(raw)
+        } catch {}
       }
       setAllDocs(docs)
 
@@ -188,31 +190,60 @@ export default function ChatPage() {
     if (!text.trim()) return
 
     const userMessage: Message = { id: messages.length + 1, content: text, sender: "user", timestamp: new Date() }
+    const aiId = messages.length + 2
     setMessages((prev) => [...prev, userMessage])
     setInputMessage("")
     setIsTyping(true)
 
+    // Add empty AI message immediately so user sees it start filling
+    setMessages((prev) => [...prev, { id: aiId, content: "", sender: "ai", timestamp: new Date(), sources: [] }])
+
     try {
-      const response = await fetch(apiUrl("/ask/"), {
+      const response = await fetch(apiUrl("/ask-stream/"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: text, language: lang }),
       })
-      const data = await response.json()
-      setMessages((prev) => [...prev, {
-        id: prev.length + 1,
-        content: data.answer ?? data.error ?? (lang === 'hi' ? "कोई उत्तर नहीं मिला।" : "No answer found."),
-        sender: "ai",
-        timestamp: new Date(),
-        sources: data.sources,
-      }])
+      if (!response.body) throw new Error("No stream")
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+
+      setIsTyping(false)
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n")
+        buffer = lines.pop() ?? ""
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue
+          const data = line.slice(6)
+          if (data === "[DONE]") break
+          try {
+            const parsed = JSON.parse(data)
+            if (parsed.sources) {
+              setMessages((prev) => prev.map((m) => m.id === aiId ? { ...m, sources: parsed.sources } : m))
+            } else if (parsed.content) {
+              setMessages((prev) => prev.map((m) =>
+                m.id === aiId ? { ...m, content: m.content + parsed.content } : m
+              ))
+            } else if (parsed.error) {
+              setMessages((prev) => prev.map((m) => m.id === aiId ? { ...m, content: parsed.error } : m))
+            }
+          } catch {}
+        }
+      }
     } catch {
-      setMessages((prev) => [...prev, {
-        id: prev.length + 1,
-        content: lang === 'hi' ? "त्रुटि हुई। कृपया पुनः प्रयास करें।" : "An error occurred. Please try again.",
-        sender: "ai",
-        timestamp: new Date(),
-      }])
+      setIsTyping(false)
+      setMessages((prev) => prev.map((m) =>
+        m.id === aiId
+          ? { ...m, content: lang === 'hi' ? "त्रुटि हुई। कृपया पुनः प्रयास करें।" : "An error occurred. Please try again." }
+          : m
+      ))
     } finally {
       setIsTyping(false)
     }

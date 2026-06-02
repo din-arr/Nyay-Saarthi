@@ -17,5 +17,8 @@ export const config = {
     '/timeline/:path*',
     '/profile/:path*',
     '/account-settings/:path*',
+    '/red-flags/:path*',
+    '/translate/:path*',
+    '/legal-qa/:path*',
   ],
 }

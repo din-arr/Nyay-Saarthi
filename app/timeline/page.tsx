@@ -10,6 +10,7 @@ import {
   FileText, CalendarClock,
 } from "lucide-react"
 import { useLanguage } from "@/lib/language-context"
+import { getDocuments } from "@/lib/supabase-documents"
 
 interface DocumentAnalysis {
   document_type: string
@@ -82,21 +83,54 @@ const statusConfig = {
   },
 }
 
+interface AggregatedDate {
+  raw: string
+  docName: string
+  docType: string
+}
+
 export default function TimelinePage() {
-  const [analysis, setAnalysis] = useState<DocumentAnalysis | null>(null)
-  const [docName, setDocName] = useState("")
+  const [allDates, setAllDates] = useState<AggregatedDate[]>([])
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
   const { lang } = useLanguage()
   const hi = lang === "hi"
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("nyay_document_analysis")
-      const name = localStorage.getItem("nyay_document_name")
-      if (raw) setAnalysis(JSON.parse(raw))
-      if (name) setDocName(name)
-    } catch {}
+    async function load() {
+      let docsSource: { name: string; analysis?: { key_dates?: string[]; document_type?: string } }[] = []
+      const sbDocs = await getDocuments()
+      if (sbDocs.length > 0) {
+        docsSource = sbDocs
+      } else {
+        try {
+          const raw = localStorage.getItem("nyay_documents")
+          if (raw) docsSource = JSON.parse(raw)
+        } catch {}
+      }
+      const dates: AggregatedDate[] = []
+      for (const doc of docsSource) {
+        for (const d of (doc.analysis?.key_dates ?? [])) {
+          dates.push({ raw: d, docName: doc.name, docType: doc.analysis?.document_type ?? "" })
+        }
+      }
+      setAllDates(dates)
+      setLoading(false)
+    }
+    load()
   }, [])
+
+  // Backwards compat: derive a single analysis-like object from aggregated dates for display
+  const analysis = allDates.length > 0 ? { key_dates: allDates.map(d => d.raw), document_type: "", risk_level: "", parties: [] } : null
+  const docName = ""
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse text-gray-400">{hi ? "लोड हो रहा है..." : "Loading..."}</div>
+      </div>
+    )
+  }
 
   if (!analysis) {
     return (
@@ -105,16 +139,12 @@ export default function TimelinePage() {
           <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-full flex items-center justify-center mx-auto shadow-lg">
             <CalendarClock className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {hi ? "समयरेखा" : "Timeline"}
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{hi ? "समयरेखा" : "Timeline"}</h1>
           <p className="text-gray-500 dark:text-gray-400 max-w-sm">
             {hi ? "समयरेखा देखने के लिए पहले कोई दस्तावेज़ अपलोड करें।" : "Upload a document first to view its deadline timeline."}
           </p>
-          <Button onClick={() => router.push("/upload")}
-            className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8">
-            <Upload className="w-4 h-4 mr-2" />
-            {hi ? "दस्तावेज़ अपलोड करें" : "Upload Document"}
+          <Button onClick={() => router.push("/upload")} className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8">
+            <Upload className="w-4 h-4 mr-2" />{hi ? "दस्तावेज़ अपलोड करें" : "Upload Document"}
           </Button>
         </div>
       </div>

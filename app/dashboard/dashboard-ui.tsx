@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input"
 import { Upload, Search, LayoutDashboard } from "lucide-react"
 import Link from "next/link"
 import { DocumentHistory } from "./document-history"
+import { ExpiryAlerts } from "./expiry-alerts"
 import { useLanguage } from "@/lib/language-context"
 
 export function DashboardUI({ displayName }: { displayName: string }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
@@ -44,7 +45,10 @@ export function DashboardUI({ displayName }: { displayName: string }) {
           </div>
         </div>
 
-        <DocumentHistory />
+        <div className="space-y-6">
+          <ExpiryAlerts lang={lang} />
+          <DocumentHistory />
+        </div>
       </div>
     </div>
   )

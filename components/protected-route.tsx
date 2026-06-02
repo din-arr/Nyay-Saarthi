@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { isAuthenticated } from "@/lib/auth"
+import { isAuthenticated } from "@/lib/local-auth"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
