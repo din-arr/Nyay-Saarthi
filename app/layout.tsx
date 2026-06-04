@@ -4,7 +4,7 @@ import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
-import { Header } from "@/components/header"
+import { AppShell } from "@/components/app-shell"
 import { ThemeProvider } from "@/components/theme-provider"
 import { LanguageProvider } from "@/lib/language-context"
 import "./globals.css"
@@ -30,10 +30,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <LanguageProvider>
-            <Header />
-            <main className="pt-20">
+            <AppShell>
               <Suspense fallback={null}>{children}</Suspense>
-            </main>
+            </AppShell>
             <Analytics />
           </LanguageProvider>
         </ThemeProvider>

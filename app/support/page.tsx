@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,6 +14,7 @@ import { useLanguage } from "@/lib/language-context"
 
 export default function SupportPage() {
   const { lang } = useLanguage()
+  const router = useRouter()
   const [contactForm, setContactForm] = useState({ name: "", email: "", subject: "", message: "", priority: "medium" })
 
   const handleInputChange = (field: string, value: string) =>

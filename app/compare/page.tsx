@@ -203,18 +203,15 @@ export default function ComparePage() {
 
   useEffect(() => {
     async function load() {
-      const sbUser = await isSupabaseUser()
-      if (sbUser) {
-        const sbDocs = await getDocuments()
-        if (sbDocs.length > 0) {
-          setDocs(sbDocs.map((d) => ({ id: d.id, name: d.name, analysis: d.analysis, uploadedAt: d.uploaded_at })))
-          return
-        }
+      const sbDocs = await getDocuments()
+      if (sbDocs.length > 0) {
+        setDocs(sbDocs.map((d) => ({ id: d.id, name: d.name, analysis: d.analysis, uploadedAt: d.uploaded_at })))
+      } else {
+        try {
+          const raw = localStorage.getItem("nyay_documents")
+          if (raw) setDocs(JSON.parse(raw))
+        } catch {}
       }
-      try {
-        const raw = localStorage.getItem("nyay_documents")
-        if (raw) setDocs(JSON.parse(raw))
-      } catch {}
     }
     load()
   }, [])
